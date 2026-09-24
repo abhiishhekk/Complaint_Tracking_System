@@ -4,10 +4,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import jwt from 'jsonwebtoken';
 
 export const verifyJWT = asyncHandler(async (req, res, next) => {
-  // 1. Get accessToken from Authorization header (e.g., "Bearer <token>")
   const accessToken = req.headers.authorization?.replace("Bearer ", "");
 
-  // 2. Get refreshToken from cookies
   const { refreshToken } = req.cookies;
 
   if (!accessToken && !refreshToken) {
@@ -17,7 +15,6 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
   // First, try to verify the accessToken
   try {
     if (!accessToken) {
-        // If no access token, jump directly to refresh token logic
         throw new Error("Access token missing");
     }
 
@@ -53,19 +50,34 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
       throw new apiError(401, "Refresh token is expired or has been used");
     }
     
-    // If everything is okay, generate a new access token only.
-    // Keep the refresh token stable so repeated protected requests do not invalidate each other.
+    // Refresh Token Rotation (RTR):
+    // Generate a fresh access token and rotate the refresh token
     const newAccessToken = user.generateAccessToken();
+    const newRefreshToken = user.generateRefreshToken();
 
-    // We can't send the new access token in the response body from a middleware
-    // So, we'll attach it to a custom response header. The frontend can check for this header.
+    // Persist rotated refresh token to database
+    user.refreshToken = newRefreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    // Set rotated refresh token in secure cookie
+    const cookieOptions = {
+      httpOnly: process.env.COOKIE_HTTP_ONLY === 'true' || process.env.COOKIE_HTTP_ONLY === true,
+      secure: process.env.COOKIE_SECURE === 'true' || process.env.COOKIE_SECURE === true,
+      sameSite: process.env.COOKIE_SAME_SITE || 'None',
+    };
+    res.cookie('refreshToken', newRefreshToken, cookieOptions);
+
+    // Attach the new access token to the custom response header
     res.setHeader('x-access-token', newAccessToken);
 
-    // Attach the user to the request and continue
+    user.password = undefined;
     req.user = user;
     next();
     
   } catch (refreshError) {
+    if (refreshError instanceof apiError) {
+      throw refreshError;
+    }
     // If the refresh token is also invalid or expired
     throw new apiError(401, refreshError.message || "Session expired. Please log in again.");
   }
