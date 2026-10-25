@@ -10,6 +10,9 @@
     "preview": "vite preview",
     "start": "serve -s dist"
   },
+  "overrides": {
+    "compression": "^1.8.2"
+  },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
@@ -29,7 +32,7 @@
     "react-spinners": "^0.17.0",
     "react-window": "^2.2.0",
     "recharts": "^3.2.1",
-    "serve": "^14.2.5",
+    "serve": "^14.2.6",
     "tailwindcss": "^4.1.14"
   },
   "devDependencies": {
